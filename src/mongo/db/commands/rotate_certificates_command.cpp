@@ -63,11 +63,7 @@ public:
 #ifdef MONGO_CONFIG_SSL
             if(SSLManagerCoordinator::get()) {
                 SSLManagerCoordinator::get()->rotate();
-            } else {
-                uasserted(ErrorCodes::IllegalOperation, "The server has SSL disabled.");
             }
-#else  
-            uasserted(ErrorCodes::CommandNotSupported, "The server was not compiled with SSL support.");
 #endif
         }
 
