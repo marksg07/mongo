@@ -1518,16 +1518,13 @@ unsigned long long FiletimeToEpocMillis(FILETIME ft) {
     return ns100 / 10000;
 }
 
-// MongoDB wants RFC 2253 (LDAP) formatted DN names for auth purposes
-StatusWith<SSLX509Name> getCertificateSubjectName(PCCERT_CONTEXT cert) {
-
+StatusWith<SSLX509Name> blobToName(CERT_NAME_BLOB blob) {
     auto swBlob =
-        decodeObject(X509_NAME, cert->pCertInfo->Subject.pbData, cert->pCertInfo->Subject.cbData);
+        decodeObject(X509_NAME, blob.pbData, blob.cbData);
 
     if (!swBlob.isOK()) {
         return swBlob.getStatus();
     }
-
     PCERT_NAME_INFO nameInfo = reinterpret_cast<PCERT_NAME_INFO>(swBlob.getValue().data());
 
     std::vector<std::vector<SSLX509Name::Entry>> entries;
@@ -1582,6 +1579,11 @@ StatusWith<SSLX509Name> getCertificateSubjectName(PCCERT_CONTEXT cert) {
     }
 
     return SSLX509Name(std::move(entries));
+}
+
+// MongoDB wants RFC 2253 (LDAP) formatted DN names for auth purposes
+StatusWith<SSLX509Name> getCertificateSubjectName(PCCERT_CONTEXT cert) {
+    return blobToName(cert->pCertInfo->Subject);    
 }
 
 Status SSLManagerWindows::_validateCertificate(PCCERT_CONTEXT cert,
@@ -2048,8 +2050,47 @@ Future<SSLPeerInfo> SSLManagerWindows::parseAndValidatePeerCertificate(
     }
 }
 
+void getCertInfo(CertInformationToLog* info, PCCERT_CONTEXT cert) {
+    info->subject = uassertStatusOK(getCertificateSubjectName(cert));
+    info->issuer = uassertStatusOK(blobToName(cert->pCertInfo->issuer));
+    int bufSize;
+    CertGetCertificateContextProperty(cert, CERT_SHA1_HASH_PROP_ID, nullptr, &bufSize);
+    info->thumbprint.reserve(bufSize);
+    CertGetCertificateContextProperty(cert, CERT_SHA1_HASH_PROP_ID, info->thumbprint.data, &bufSize);
+    info->notBefore = Date_t::fromMillisSinceEpoch(FiletimeToEpocMillis(cert->pCertInfo->NotBefore));
+    info->notAfter = Date_t::fromMillisSinceEpoch(FiletimeToEpocMillis(cert->pCertInfo->NotAfter));
+}
+
+void getCRLInfo(CRLInformationToLog* info, PCCRL_CONTEXT crl) {
+    int bufSize;
+    CertGetCRLContextProperty(crl, CERT_SHA1_HASH_PROP_ID, nullptr, &bufSize);
+    info->thumbprint.reserve(bufSize);
+    CertGetCRLContextProperty(crl, CERT_SHA1_HASH_PROP_ID, info->thumbprint.data, &bufSize);
+    info->notBefore = Date_t::fromMillisSinceEpoch(FiletimeToEpocMillis(crl->pCrlInfo->ThisUpdate));
+    info->notAfter = Date_t::fromMillisSinceEpoch(FiletimeToEpocMillis(crl->pCrlInfo->NextUpdate));
+}
+
 SSLInformationToLog SSLManagerWindows::getSSLInformationToLog() const {
     SSLInformationToLog info;
+
+    auto serverCert = _serverCertificates[0];
+    if(serverCert != nullptr) {
+        getCertInfo(&info.server, serverCert);
+    }
+
+    auto clientCert = _clientCertificates[0];
+    if(clientCert != nullptr) {
+        getCertInfo(&info.cluster.get(), clientCert);
+    } else {
+        info.cluster = boost::none;
+    }
+    
+    auto crl = CertGetCRLFromStore(serverCert->hCertStore, serverCert, nullptr, 0);
+    if(crl != nullptr) {
+        UniqueCRL crlHolder(crl);
+        getCRLInfo(&info.crl.get(), crl);
+    }
+    
     return info;
 }
 
