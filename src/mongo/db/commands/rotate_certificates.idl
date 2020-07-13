@@ -26,7 +26,7 @@
 # it in the license file.
 #
 
-# dropConnections IDL File.
+# rotateCertificates IDL File.
 
 global:
     cpp_namespace: "mongo"
