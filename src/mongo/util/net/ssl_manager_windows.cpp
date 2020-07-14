@@ -1519,8 +1519,7 @@ unsigned long long FiletimeToEpocMillis(FILETIME ft) {
 }
 
 StatusWith<SSLX509Name> blobToName(CERT_NAME_BLOB blob) {
-    auto swBlob =
-        decodeObject(X509_NAME, blob.pbData, blob.cbData);
+    auto swBlob = decodeObject(X509_NAME, blob.pbData, blob.cbData);
 
     if (!swBlob.isOK()) {
         return swBlob.getStatus();
@@ -1583,7 +1582,7 @@ StatusWith<SSLX509Name> blobToName(CERT_NAME_BLOB blob) {
 
 // MongoDB wants RFC 2253 (LDAP) formatted DN names for auth purposes
 StatusWith<SSLX509Name> getCertificateSubjectName(PCCERT_CONTEXT cert) {
-    return blobToName(cert->pCertInfo->Subject);    
+    return blobToName(cert->pCertInfo->Subject);
 }
 
 Status SSLManagerWindows::_validateCertificate(PCCERT_CONTEXT cert,
@@ -2057,29 +2056,34 @@ void getCertInfo(CertInformationToLog* info, PCCERT_CONTEXT cert) {
     info->issuer = uassertStatusOK(blobToName(cert->pCertInfo->Issuer));
     DWORD bufSize = kSHA1HashBytes;
     info->thumbprint.resize(kSHA1HashBytes);
-    CertGetCertificateContextProperty(cert, CERT_SHA1_HASH_PROP_ID, info->thumbprint.data(), &bufSize);
-    info->validityNotBefore = Date_t::fromMillisSinceEpoch(FiletimeToEpocMillis(cert->pCertInfo->NotBefore));
-    info->validityNotAfter = Date_t::fromMillisSinceEpoch(FiletimeToEpocMillis(cert->pCertInfo->NotAfter));
+    CertGetCertificateContextProperty(
+        cert, CERT_SHA1_HASH_PROP_ID, info->thumbprint.data(), &bufSize);
+    info->validityNotBefore =
+        Date_t::fromMillisSinceEpoch(FiletimeToEpocMillis(cert->pCertInfo->NotBefore));
+    info->validityNotAfter =
+        Date_t::fromMillisSinceEpoch(FiletimeToEpocMillis(cert->pCertInfo->NotAfter));
 }
 
 void getCRLInfo(CRLInformationToLog* info, PCCRL_CONTEXT crl) {
     DWORD bufSize = kSHA1HashBytes;
     info->thumbprint.resize(kSHA1HashBytes);
     CertGetCRLContextProperty(crl, CERT_SHA1_HASH_PROP_ID, info->thumbprint.data(), &bufSize);
-    info->validityNotBefore = Date_t::fromMillisSinceEpoch(FiletimeToEpocMillis(crl->pCrlInfo->ThisUpdate));
-    info->validityNotAfter = Date_t::fromMillisSinceEpoch(FiletimeToEpocMillis(crl->pCrlInfo->NextUpdate));
+    info->validityNotBefore =
+        Date_t::fromMillisSinceEpoch(FiletimeToEpocMillis(crl->pCrlInfo->ThisUpdate));
+    info->validityNotAfter =
+        Date_t::fromMillisSinceEpoch(FiletimeToEpocMillis(crl->pCrlInfo->NextUpdate));
 }
 
 SSLInformationToLog SSLManagerWindows::getSSLInformationToLog() const {
     SSLInformationToLog info;
 
     auto serverCert = _serverCertificates[0];
-    if(serverCert != nullptr) {
+    if (serverCert != nullptr) {
         getCertInfo(&info.server, serverCert);
     }
 
     auto clientCert = _clientCertificates[0];
-    if(clientCert != nullptr) {
+    if (clientCert != nullptr) {
         CertInformationToLog cluster;
         getCertInfo(&cluster, clientCert);
         info.cluster = cluster;
@@ -2087,17 +2091,17 @@ SSLInformationToLog SSLManagerWindows::getSSLInformationToLog() const {
         info.cluster = boost::none;
     }
     DWORD pdw = 0;
-    if(_serverEngine.hasCRL) {
+    if (_serverEngine.hasCRL) {
         HCERTSTORE store = const_cast<UniqueCertStore&>(_serverEngine.CAstore);
-        auto crl = CertGetCRLFromStore(store, nullptr, nullptr,&pdw);
-        if(crl != nullptr) {
+        auto crl = CertGetCRLFromStore(store, nullptr, nullptr, &pdw);
+        if (crl != nullptr) {
             UniqueCRL crlHolder(crl);
             CRLInformationToLog crlInfo;
             getCRLInfo(&crlInfo, crl);
             info.crl = crlInfo;
         }
     }
-    
+
     return info;
 }
 
