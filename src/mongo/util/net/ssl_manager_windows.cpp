@@ -2050,24 +2050,24 @@ Future<SSLPeerInfo> SSLManagerWindows::parseAndValidatePeerCertificate(
     }
 }
 
+const int kSHA1HashBytes = 20;
+
 void getCertInfo(CertInformationToLog* info, PCCERT_CONTEXT cert) {
     info->subject = uassertStatusOK(getCertificateSubjectName(cert));
-    info->issuer = uassertStatusOK(blobToName(cert->pCertInfo->issuer));
-    int bufSize;
-    CertGetCertificateContextProperty(cert, CERT_SHA1_HASH_PROP_ID, nullptr, &bufSize);
-    info->thumbprint.reserve(bufSize);
-    CertGetCertificateContextProperty(cert, CERT_SHA1_HASH_PROP_ID, info->thumbprint.data, &bufSize);
-    info->notBefore = Date_t::fromMillisSinceEpoch(FiletimeToEpocMillis(cert->pCertInfo->NotBefore));
-    info->notAfter = Date_t::fromMillisSinceEpoch(FiletimeToEpocMillis(cert->pCertInfo->NotAfter));
+    info->issuer = uassertStatusOK(blobToName(cert->pCertInfo->Issuer));
+    DWORD bufSize = kSHA1HashBytes;
+    info->thumbprint.resize(kSHA1HashBytes);
+    CertGetCertificateContextProperty(cert, CERT_SHA1_HASH_PROP_ID, info->thumbprint.data(), &bufSize);
+    info->validityNotBefore = Date_t::fromMillisSinceEpoch(FiletimeToEpocMillis(cert->pCertInfo->NotBefore));
+    info->validityNotAfter = Date_t::fromMillisSinceEpoch(FiletimeToEpocMillis(cert->pCertInfo->NotAfter));
 }
 
 void getCRLInfo(CRLInformationToLog* info, PCCRL_CONTEXT crl) {
-    int bufSize;
-    CertGetCRLContextProperty(crl, CERT_SHA1_HASH_PROP_ID, nullptr, &bufSize);
-    info->thumbprint.reserve(bufSize);
-    CertGetCRLContextProperty(crl, CERT_SHA1_HASH_PROP_ID, info->thumbprint.data, &bufSize);
-    info->notBefore = Date_t::fromMillisSinceEpoch(FiletimeToEpocMillis(crl->pCrlInfo->ThisUpdate));
-    info->notAfter = Date_t::fromMillisSinceEpoch(FiletimeToEpocMillis(crl->pCrlInfo->NextUpdate));
+    DWORD bufSize = kSHA1HashBytes;
+    info->thumbprint.resize(kSHA1HashBytes);
+    CertGetCRLContextProperty(crl, CERT_SHA1_HASH_PROP_ID, info->thumbprint.data(), &bufSize);
+    info->validityNotBefore = Date_t::fromMillisSinceEpoch(FiletimeToEpocMillis(crl->pCrlInfo->ThisUpdate));
+    info->validityNotAfter = Date_t::fromMillisSinceEpoch(FiletimeToEpocMillis(crl->pCrlInfo->NextUpdate));
 }
 
 SSLInformationToLog SSLManagerWindows::getSSLInformationToLog() const {
@@ -2080,15 +2080,22 @@ SSLInformationToLog SSLManagerWindows::getSSLInformationToLog() const {
 
     auto clientCert = _clientCertificates[0];
     if(clientCert != nullptr) {
-        getCertInfo(&info.cluster.get(), clientCert);
+        CertInformationToLog cluster;
+        getCertInfo(&cluster, clientCert);
+        info.cluster = cluster;
     } else {
         info.cluster = boost::none;
     }
-    
-    auto crl = CertGetCRLFromStore(serverCert->hCertStore, serverCert, nullptr, 0);
-    if(crl != nullptr) {
-        UniqueCRL crlHolder(crl);
-        getCRLInfo(&info.crl.get(), crl);
+    DWORD pdw = 0;
+    if(_serverEngine.hasCRL) {
+        HCERTSTORE store = const_cast<UniqueCertStore&>(_serverEngine.CAstore);
+        auto crl = CertGetCRLFromStore(store, nullptr, nullptr,&pdw);
+        if(crl != nullptr) {
+            UniqueCRL crlHolder(crl);
+            CRLInformationToLog crlInfo;
+            getCRLInfo(&crlInfo, crl);
+            info.crl = crlInfo;
+        }
     }
     
     return info;
