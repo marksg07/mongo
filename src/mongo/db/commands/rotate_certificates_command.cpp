@@ -30,11 +30,11 @@
 #include "mongo/platform/basic.h"
 
 #include "mongo/config.h"
-#include "mongo/util/net/ssl_manager.h"
 #include "mongo/db/auth/authorization_session.h"
 #include "mongo/db/commands.h"
 #include "mongo/db/commands/rotate_certificates_gen.h"
 #include "mongo/executor/egress_tag_closer_manager.h"
+#include "mongo/util/net/ssl_manager.h"
 
 namespace mongo {
 namespace {
@@ -61,7 +61,7 @@ public:
 
         void typedRun(OperationContext* opCtx) {
 #ifdef MONGO_CONFIG_SSL
-            if(SSLManagerCoordinator::get()) {
+            if (SSLManagerCoordinator::get()) {
                 SSLManagerCoordinator::get()->rotate();
             }
 #endif
