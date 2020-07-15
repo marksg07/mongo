@@ -31,6 +31,7 @@
 
 #include <vector>
 
+#include "mongo/config.h"
 #include "mongo/base/status.h"
 #include "mongo/platform/mutex.h"
 #include "mongo/transport/session.h"
@@ -98,17 +99,9 @@ public:
         return _tls[0]->makeBaton(opCtx);
     }
 
-    Status rotateCertificates(std::shared_ptr<SSLManagerInterface> manager) override {
-        Status ret = Status::OK();
-        _foreach([&](TransportLayer* tl){
-            Status status = tl->rotateCertificates(manager);
-            if(!status.isOK()) {
-                ret = status;
-            }
-        });
-        return ret;
-    }
-
+#ifdef MONGO_CONFIG_SSL
+    Status rotateCertificates(std::shared_ptr<SSLManagerInterface> manager) override;
+#endif
 private:
     template <typename Callable>
     void _foreach(Callable&& cb) const;

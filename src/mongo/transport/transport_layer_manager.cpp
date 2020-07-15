@@ -37,6 +37,7 @@
 #include <limits>
 #include <memory>
 
+#include "mongo/config.h"
 #include "mongo/base/status.h"
 #include "mongo/db/server_options.h"
 #include "mongo/db/service_context.h"
@@ -143,6 +144,19 @@ std::unique_ptr<TransportLayer> TransportLayerManager::createWithConfig(
     retVector.emplace_back(std::make_unique<transport::TransportLayerASIO>(opts, sep));
     return std::make_unique<TransportLayerManager>(std::move(retVector));
 }
+
+#ifdef MONGO_CONFIG_SSL
+Status TransportLayerManager::rotateCertificates(std::shared_ptr<SSLManagerInterface> manager) {
+        Status ret = Status::OK();
+        _foreach([&](TransportLayer* tl){
+            Status status = tl->rotateCertificates(manager);
+            if(!status.isOK()) {
+                ret = status;
+            }
+        });
+        return ret;
+    }
+#endif
 
 }  // namespace transport
 }  // namespace mongo
