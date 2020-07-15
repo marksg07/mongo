@@ -2115,8 +2115,8 @@ SSLInformationToLog SSLManagerWindows::getSSLInformationToLog() const {
 
     if (_serverEngine.hasCRL) {
         HCERTSTORE store = const_cast<UniqueCertStore&>(_serverEngine.CAstore);
-        DWORD pdw = 0;
-        auto crl = CertGetCRLFromStore(store, nullptr, nullptr, &pdw);
+        DWORD flags = 0;
+        auto crl = CertGetCRLFromStore(store, nullptr, nullptr, &flags);
         if (crl != nullptr) {
             UniqueCRL crlHolder(crl);
             CRLInformationToLog crlInfo;
