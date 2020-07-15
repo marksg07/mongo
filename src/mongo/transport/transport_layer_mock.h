@@ -74,6 +74,10 @@ public:
     // Set to a factory function to use your own session type.
     std::function<SessionHandle(TransportLayer*)> createSessionHook;
 
+    Status rotateCertificates(std::shared_ptr<SSLManagerInterface> manager) override {
+        return Status::OK();
+    }
+
 private:
     friend class MockSession;
 

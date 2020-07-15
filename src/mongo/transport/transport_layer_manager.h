@@ -98,6 +98,17 @@ public:
         return _tls[0]->makeBaton(opCtx);
     }
 
+    Status rotateCertificates(std::shared_ptr<SSLManagerInterface> manager) override {
+        Status ret = Status::OK();
+        _foreach([&](TransportLayer* tl){
+            Status status = tl->rotateCertificates(manager);
+            if(!status.isOK()) {
+                ret = status;
+            }
+        });
+        return ret;
+    }
+
 private:
     template <typename Callable>
     void _foreach(Callable&& cb) const;
