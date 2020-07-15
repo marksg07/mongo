@@ -52,6 +52,8 @@
 #include "mongo/util/str.h"
 #include "mongo/util/synchronized_value.h"
 #include "mongo/util/text.h"
+#include "mongo/db/auth/sasl_command_constants.h"
+#include "mongo/transport/transport_layer_asio.h"
 
 namespace mongo {
 
@@ -344,7 +346,39 @@ std::shared_ptr<SSLManagerInterface> SSLManagerCoordinator::getSSLManager() {
     return *_manager;
 }
 
-void SSLManagerCoordinator::rotate() {}
+void SSLManagerCoordinator::rotate() {
+    /*rotate():
+   lock mutex
+   _sslManager = SSLManagerInterface::create(...)
+   if(using_x509_to_auth_with_cluster)
+      setInternalUserAuthParams(...)
+   unlock mutex*/
+   // Note: This isn't Windows-specific code, but other platforms may need more work
+   #ifdef _WIN32
+   stdx::lock_guard lockGuard(_lock);
+   _manager = SSLManagerInterface::create(sslGlobalParams, isSSLServer);
+   int clusterAuthMode = serverGlobalParams.clusterAuthMode.load();
+   /*if (!serverGlobalParams.keyFile.empty() &&
+        clusterAuthMode != ServerGlobalParams::ClusterAuthMode_x509) {
+        if (!setUpSecurityKey(serverGlobalParams.keyFile)) {
+            // error message printed in setUpPrivateKey
+            //todo
+        }
+    }*/
+   if (clusterAuthMode == ServerGlobalParams::ClusterAuthMode_x509 ||
+        clusterAuthMode == ServerGlobalParams::ClusterAuthMode_sendX509) {
+        auth::setInternalUserAuthParams(BSON(saslCommandMechanismFieldName
+                                             << "MONGODB-X509" << saslCommandUserDBFieldName
+                                             << "$external" << saslCommandUserFieldName
+                                             << _manager->get()->getSSLConfiguration()
+                                                    .clientSubjectName.toString()));
+    }
+    transport::TransportLayer* tl = getGlobalServiceContext()->getTransportLayer();
+    invariant(tl != nullptr);
+    tl->rotateCertificates(*_manager);
+    LOGV2(4913400, "Completed rotate successfully!");
+   #endif
+}
 
 SSLManagerCoordinator::SSLManagerCoordinator()
     : _manager(SSLManagerInterface::create(sslGlobalParams, isSSLServer)) {}
