@@ -1525,6 +1525,7 @@ StatusWith<SSLX509Name> blobToName(CERT_NAME_BLOB blob) {
     if (!swBlob.isOK()) {
         return swBlob.getStatus();
     }
+
     PCERT_NAME_INFO nameInfo = reinterpret_cast<PCERT_NAME_INFO>(swBlob.getValue().data());
 
     std::vector<std::vector<SSLX509Name::Entry>> entries;
@@ -2050,29 +2051,49 @@ Future<SSLPeerInfo> SSLManagerWindows::parseAndValidatePeerCertificate(
     }
 }
 
-const int kSHA1HashBytes = 20;
+constexpr size_t kSHA1HashBytes = 20;
 
-void getCertInfo(CertInformationToLog* info, PCCERT_CONTEXT cert) {
+Status getCertInfo(CertInformationToLog* info, PCCERT_CONTEXT cert) {
     info->subject = uassertStatusOK(getCertificateSubjectName(cert));
     info->issuer = uassertStatusOK(blobToName(cert->pCertInfo->Issuer));
+
     DWORD bufSize = kSHA1HashBytes;
     info->thumbprint.resize(kSHA1HashBytes);
-    CertGetCertificateContextProperty(
-        cert, CERT_SHA1_HASH_PROP_ID, info->thumbprint.data(), &bufSize);
+
+    if (!CertGetCertificateContextProperty(
+            cert, CERT_SHA1_HASH_PROP_ID, info->thumbprint.data(), &bufSize)) {
+        DWORD gle = GetLastError();
+        return Status(ErrorCodes::InvalidSSLConfiguration,
+                      str::stream() << "getCertInfo failed to get certificate thumbprint: "
+                                    << errnoWithDescription(gle));
+    }
+
     info->validityNotBefore =
         Date_t::fromMillisSinceEpoch(FiletimeToEpocMillis(cert->pCertInfo->NotBefore));
     info->validityNotAfter =
         Date_t::fromMillisSinceEpoch(FiletimeToEpocMillis(cert->pCertInfo->NotAfter));
+
+    return Status::OK();
 }
 
-void getCRLInfo(CRLInformationToLog* info, PCCRL_CONTEXT crl) {
+Status getCRLInfo(CRLInformationToLog* info, PCCRL_CONTEXT crl) {
     DWORD bufSize = kSHA1HashBytes;
     info->thumbprint.resize(kSHA1HashBytes);
-    CertGetCRLContextProperty(crl, CERT_SHA1_HASH_PROP_ID, info->thumbprint.data(), &bufSize);
+
+    if (!CertGetCRLContextProperty(
+            crl, CERT_SHA1_HASH_PROP_ID, info->thumbprint.data(), &bufSize)) {
+        DWORD gle = GetLastError();
+        return Status(ErrorCodes::InvalidSSLConfiguration,
+                      str::stream() << "getCRLInfo failed to get CRL thumbprint: "
+                                    << errnoWithDescription(gle));
+    }
+
     info->validityNotBefore =
         Date_t::fromMillisSinceEpoch(FiletimeToEpocMillis(crl->pCrlInfo->ThisUpdate));
     info->validityNotAfter =
         Date_t::fromMillisSinceEpoch(FiletimeToEpocMillis(crl->pCrlInfo->NextUpdate));
+
+    return Status::OK();
 }
 
 SSLInformationToLog SSLManagerWindows::getSSLInformationToLog() const {
@@ -2080,25 +2101,26 @@ SSLInformationToLog SSLManagerWindows::getSSLInformationToLog() const {
 
     auto serverCert = _serverCertificates[0];
     if (serverCert != nullptr) {
-        getCertInfo(&info.server, serverCert);
+        uassertStatusOK(getCertInfo(&info.server, serverCert));
     }
 
     auto clientCert = _clientCertificates[0];
     if (clientCert != nullptr) {
         CertInformationToLog cluster;
-        getCertInfo(&cluster, clientCert);
+        uassertStatusOK(getCertInfo(&cluster, clientCert));
         info.cluster = cluster;
     } else {
         info.cluster = boost::none;
     }
-    DWORD pdw = 0;
+
     if (_serverEngine.hasCRL) {
         HCERTSTORE store = const_cast<UniqueCertStore&>(_serverEngine.CAstore);
+        DWORD pdw = 0;
         auto crl = CertGetCRLFromStore(store, nullptr, nullptr, &pdw);
         if (crl != nullptr) {
             UniqueCRL crlHolder(crl);
             CRLInformationToLog crlInfo;
-            getCRLInfo(&crlInfo, crl);
+            uassertStatusOK(getCRLInfo(&crlInfo, crl));
             info.crl = crlInfo;
         }
     }
