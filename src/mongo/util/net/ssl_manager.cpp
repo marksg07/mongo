@@ -54,6 +54,7 @@
 #include "mongo/util/text.h"
 #include "mongo/db/auth/sasl_command_constants.h"
 #include "mongo/transport/transport_layer_asio.h"
+#include "mongo/client/internal_auth.h"
 
 namespace mongo {
 
