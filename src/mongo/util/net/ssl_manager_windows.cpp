@@ -2109,8 +2109,6 @@ SSLInformationToLog SSLManagerWindows::getSSLInformationToLog() const {
         CertInformationToLog cluster;
         uassertStatusOK(getCertInfo(&cluster, clientCert));
         info.cluster = cluster;
-    } else {
-        info.cluster = boost::none;
     }
 
     if (_serverEngine.hasCRL) {
