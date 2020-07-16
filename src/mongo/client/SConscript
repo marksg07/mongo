@@ -154,6 +154,7 @@ env.Library(
     ],
     LIBDEPS=[
         '$BUILD_DIR/mongo/bson/util/bson_extract',
+        '$BUILD_DIR/mongo/util/md5',
         #'$BUILD_DIR/mongo/executor/remote_command',
     ],
     LIBDEPS_PRIVATE=[
