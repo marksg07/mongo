@@ -347,6 +347,8 @@ std::shared_ptr<SSLManagerInterface> SSLManagerCoordinator::getSSLManager() {
     return *_manager;
 }
 
+std::string sslInfoToString(const SSLInformationToLog& info);
+
 void SSLManagerCoordinator::rotate() {
     /*rotate():
    lock mutex
@@ -378,6 +380,7 @@ void SSLManagerCoordinator::rotate() {
     invariant(tl != nullptr);
     tl->rotateCertificates(*_manager);
     LOGV2(4913400, "Completed rotate successfully!");
+    LOGV2(4913401, "SSL metadata: {sslInfo}", "sslInfo"_attr = sslInfoToString(_manager->get()->getSSLInformationToLog()));
    #endif
 }
 
@@ -1255,6 +1258,30 @@ void recordTLSVersion(TLSVersion version, const HostAndPort& hostForLogging) {
               "tlsVersion"_attr = versionString,
               "remoteHost"_attr = hostForLogging);
     }
+}
+
+std::string certToString(const CertInformationToLog& cert) {
+    auto subj = cert.subject.toString();
+    auto issuer = cert.issuer.toString();
+    auto tp = std::string(cert.thumbprint.begin(), cert.thumbprint.end());
+    auto nb = cert.validityNotBefore.toString();
+    auto na = cert.validityNotAfter.toString();
+    return "{S: \"" + subj + "\", I: \"" + issuer + "\", H: \"" + tp + "\", NB: " + nb +
+        ", NA: " + na + "}";
+}
+
+std::string crlToString(const CRLInformationToLog& crl) {
+    auto tp = std::string(crl.thumbprint.begin(), crl.thumbprint.end());
+    auto nb = crl.validityNotBefore.toString();
+    auto na = crl.validityNotAfter.toString();
+    return "{H: \"" + tp + "\", NB: " + nb + ", NA: " + na + "}";
+}
+
+std::string sslInfoToString(const SSLInformationToLog& info) {
+    auto server = certToString(info.server);
+    auto clus = info.cluster.has_value() ? certToString(info.cluster.get()) : "{}";
+    auto crl = info.crl.has_value() ? crlToString(info.crl.get()) : "{}";
+    return "{SERVER: " + server + ", CLUSTER: " + clus + ", CRL: " + crl + "}";
 }
 
 // TODO SERVER-11601 Use NFC Unicode canonicalization

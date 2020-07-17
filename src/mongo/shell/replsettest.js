@@ -3064,6 +3064,8 @@ var ReplSetTest = function(opts) {
             if (started.length) {
                 // if n was an array of conns, start will return an array of connections
                 for (var i = 0; i < started.length; i++) {
+                    jsTestLog("TEST-MSG got to auth");
+                    assert(false);
                     assert(jsTest.authenticate(started[i]), "Failed authentication during restart");
                 }
             } else {
