@@ -36,6 +36,7 @@
 #include "mongo/base/status_with.h"
 #include "mongo/base/string_data.h"
 #include "mongo/bson/bsonobj.h"
+#include "mongo/client/internal_auth.h"
 #include "mongo/client/mongo_uri.h"
 #include "mongo/client/sasl_client_session.h"
 #include "mongo/db/auth/user_name.h"
@@ -44,7 +45,6 @@
 #include "mongo/util/future.h"
 #include "mongo/util/md5.h"
 #include "mongo/util/net/hostandport.h"
-#include "mongo/client/internal_auth.h"
 
 namespace mongo {
 

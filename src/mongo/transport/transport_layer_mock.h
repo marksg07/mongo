@@ -29,8 +29,8 @@
 
 #pragma once
 
-#include "mongo/config.h"
 #include "mongo/base/status.h"
+#include "mongo/config.h"
 #include "mongo/stdx/unordered_map.h"
 #include "mongo/transport/session.h"
 #include "mongo/transport/transport_layer.h"

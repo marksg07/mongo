@@ -40,11 +40,14 @@
 
 #include "mongo/base/init.h"
 #include "mongo/bson/bsonobjbuilder.h"
+#include "mongo/client/internal_auth.h"
 #include "mongo/config.h"
+#include "mongo/db/auth/sasl_command_constants.h"
 #include "mongo/db/commands/server_status.h"
 #include "mongo/logv2/log.h"
 #include "mongo/platform/overflow_arithmetic.h"
 #include "mongo/transport/session.h"
+#include "mongo/transport/transport_layer_asio.h"
 #include "mongo/util/hex.h"
 #include "mongo/util/icu.h"
 #include "mongo/util/net/ssl_options.h"
@@ -52,9 +55,6 @@
 #include "mongo/util/str.h"
 #include "mongo/util/synchronized_value.h"
 #include "mongo/util/text.h"
-#include "mongo/db/auth/sasl_command_constants.h"
-#include "mongo/transport/transport_layer_asio.h"
-#include "mongo/client/internal_auth.h"
 
 namespace mongo {
 
@@ -348,26 +348,26 @@ std::shared_ptr<SSLManagerInterface> SSLManagerCoordinator::getSSLManager() {
 }
 
 void SSLManagerCoordinator::rotate() {
-   // Note: This isn't Windows-specific code, but other platforms may need more work
-   #ifdef _WIN32
-   stdx::lock_guard lockGuard(_lock);
-   _manager = SSLManagerInterface::create(sslGlobalParams, isSSLServer);
-   
-   int clusterAuthMode = serverGlobalParams.clusterAuthMode.load();
-   if (clusterAuthMode == ServerGlobalParams::ClusterAuthMode_x509 ||
+// Note: This isn't Windows-specific code, but other platforms may need more work
+#ifdef _WIN32
+    stdx::lock_guard lockGuard(_lock);
+    _manager = SSLManagerInterface::create(sslGlobalParams, isSSLServer);
+
+    int clusterAuthMode = serverGlobalParams.clusterAuthMode.load();
+    if (clusterAuthMode == ServerGlobalParams::ClusterAuthMode_x509 ||
         clusterAuthMode == ServerGlobalParams::ClusterAuthMode_sendX509) {
-        auth::setInternalUserAuthParams(BSON(saslCommandMechanismFieldName
-                                             << "MONGODB-X509" << saslCommandUserDBFieldName
-                                             << "$external" << saslCommandUserFieldName
-                                             << _manager->get()->getSSLConfiguration()
-                                                    .clientSubjectName.toString()));
+        auth::setInternalUserAuthParams(
+            BSON(saslCommandMechanismFieldName
+                 << "MONGODB-X509" << saslCommandUserDBFieldName << "$external"
+                 << saslCommandUserFieldName
+                 << _manager->get()->getSSLConfiguration().clientSubjectName.toString()));
     }
 
     transport::TransportLayer* tl = getGlobalServiceContext()->getTransportLayer();
     invariant(tl != nullptr);
     tl->rotateCertificates(*_manager);
     LOGV2(4913400, "Completed rotate successfully!");
-    #endif
+#endif
 }
 
 SSLManagerCoordinator::SSLManagerCoordinator()
