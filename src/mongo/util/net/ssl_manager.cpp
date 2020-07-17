@@ -347,27 +347,13 @@ std::shared_ptr<SSLManagerInterface> SSLManagerCoordinator::getSSLManager() {
     return *_manager;
 }
 
-std::string sslInfoToString(const SSLInformationToLog& info);
-
 void SSLManagerCoordinator::rotate() {
-    /*rotate():
-   lock mutex
-   _sslManager = SSLManagerInterface::create(...)
-   if(using_x509_to_auth_with_cluster)
-      setInternalUserAuthParams(...)
-   unlock mutex*/
    // Note: This isn't Windows-specific code, but other platforms may need more work
    #ifdef _WIN32
    stdx::lock_guard lockGuard(_lock);
    _manager = SSLManagerInterface::create(sslGlobalParams, isSSLServer);
+   
    int clusterAuthMode = serverGlobalParams.clusterAuthMode.load();
-   /*if (!serverGlobalParams.keyFile.empty() &&
-        clusterAuthMode != ServerGlobalParams::ClusterAuthMode_x509) {
-        if (!setUpSecurityKey(serverGlobalParams.keyFile)) {
-            // error message printed in setUpPrivateKey
-            //todo
-        }
-    }*/
    if (clusterAuthMode == ServerGlobalParams::ClusterAuthMode_x509 ||
         clusterAuthMode == ServerGlobalParams::ClusterAuthMode_sendX509) {
         auth::setInternalUserAuthParams(BSON(saslCommandMechanismFieldName
@@ -376,12 +362,12 @@ void SSLManagerCoordinator::rotate() {
                                              << _manager->get()->getSSLConfiguration()
                                                     .clientSubjectName.toString()));
     }
+
     transport::TransportLayer* tl = getGlobalServiceContext()->getTransportLayer();
     invariant(tl != nullptr);
     tl->rotateCertificates(*_manager);
     LOGV2(4913400, "Completed rotate successfully!");
-    LOGV2(4913401, "SSL metadata: {sslInfo}", "sslInfo"_attr = sslInfoToString(_manager->get()->getSSLInformationToLog()));
-   #endif
+    #endif
 }
 
 SSLManagerCoordinator::SSLManagerCoordinator()
@@ -1258,30 +1244,6 @@ void recordTLSVersion(TLSVersion version, const HostAndPort& hostForLogging) {
               "tlsVersion"_attr = versionString,
               "remoteHost"_attr = hostForLogging);
     }
-}
-
-std::string certToString(const CertInformationToLog& cert) {
-    auto subj = cert.subject.toString();
-    auto issuer = cert.issuer.toString();
-    auto tp = std::string(cert.thumbprint.begin(), cert.thumbprint.end());
-    auto nb = cert.validityNotBefore.toString();
-    auto na = cert.validityNotAfter.toString();
-    return "{S: \"" + subj + "\", I: \"" + issuer + "\", H: \"" + tp + "\", NB: " + nb +
-        ", NA: " + na + "}";
-}
-
-std::string crlToString(const CRLInformationToLog& crl) {
-    auto tp = std::string(crl.thumbprint.begin(), crl.thumbprint.end());
-    auto nb = crl.validityNotBefore.toString();
-    auto na = crl.validityNotAfter.toString();
-    return "{H: \"" + tp + "\", NB: " + nb + ", NA: " + na + "}";
-}
-
-std::string sslInfoToString(const SSLInformationToLog& info) {
-    auto server = certToString(info.server);
-    auto clus = info.cluster.has_value() ? certToString(info.cluster.get()) : "{}";
-    auto crl = info.crl.has_value() ? crlToString(info.crl.get()) : "{}";
-    return "{SERVER: " + server + ", CLUSTER: " + clus + ", CRL: " + crl + "}";
 }
 
 // TODO SERVER-11601 Use NFC Unicode canonicalization
