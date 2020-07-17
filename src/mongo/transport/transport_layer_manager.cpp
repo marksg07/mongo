@@ -37,8 +37,8 @@
 #include <limits>
 #include <memory>
 
-#include "mongo/config.h"
 #include "mongo/base/status.h"
+#include "mongo/config.h"
 #include "mongo/db/server_options.h"
 #include "mongo/db/service_context.h"
 #include "mongo/logv2/log.h"
@@ -147,14 +147,14 @@ std::unique_ptr<TransportLayer> TransportLayerManager::createWithConfig(
 
 #ifdef MONGO_CONFIG_SSL
 Status TransportLayerManager::rotateCertificates(std::shared_ptr<SSLManagerInterface> manager) {
-        for (auto&& tl : _tls) {
-            auto status = tl->rotateCertificates(manager);
-            if (!status.isOK()) {
-                return status;
-            }
+    for (auto&& tl : _tls) {
+        auto status = tl->rotateCertificates(manager);
+        if (!status.isOK()) {
+            return status;
         }
-        return Status::OK();
     }
+    return Status::OK();
+}
 #endif
 
 }  // namespace transport
