@@ -1007,8 +1007,7 @@ Status TransportLayerASIO::setup() {
     if (SSLManagerCoordinator::get()) {
         manager = SSLManagerCoordinator::get()->getSSLManager();
     }
-    Status status = rotateCertificates(manager);
-    return status;
+    return rotateCertificates(manager);
 #endif
 
     return Status::OK();
