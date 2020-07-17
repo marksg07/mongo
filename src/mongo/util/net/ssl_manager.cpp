@@ -365,7 +365,7 @@ void SSLManagerCoordinator::rotate() {
 
     transport::TransportLayer* tl = getGlobalServiceContext()->getTransportLayer();
     invariant(tl != nullptr);
-    tl->rotateCertificates(*_manager);
+    uassertStatusOK(tl->rotateCertificates(*_manager));
     LOGV2(4913400, "Completed rotate successfully!");
 #endif
 }
