@@ -147,13 +147,14 @@ std::unique_ptr<TransportLayer> TransportLayerManager::createWithConfig(
 
 #ifdef MONGO_CONFIG_SSL
 Status TransportLayerManager::rotateCertificates(std::shared_ptr<SSLManagerInterface> manager) {
-        for (auto&& tl : _tls) {
-            auto status = tl->rotateCertificates(manager);
-            if (!status.isOK()) {
-                return status;
+        Status ret = Status::OK();
+        _foreach([&](TransportLayer* tl){
+            Status status = tl->rotateCertificates(manager);
+            if(!status.isOK()) {
+                ret = status;
             }
-        }
-        return Status::OK();
+        });
+        return ret;
     }
 #endif
 
