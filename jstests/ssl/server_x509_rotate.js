@@ -45,6 +45,6 @@
     assert.neq(out, 0, "Mongo invocation did not fail");
 
     // Start shell with new certificates and make sure it can connect
-    let out = runMongoProgram("mongo", "--ssl", "--sslPEMKeyFile", dbPath + "/client-test.pem", "--sslCAFile", dbPath + "/ca-test.pem", "--eval", ";");
+    out = runMongoProgram("mongo", "--ssl", "--sslPEMKeyFile", dbPath + "/client-test.pem", "--sslCAFile", dbPath + "/ca-test.pem", "--eval", ";");
     assert.eq(out, 0, "Mongo invocation failed");
 }());
