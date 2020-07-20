@@ -349,7 +349,7 @@ std::shared_ptr<SSLManagerInterface> SSLManagerCoordinator::getSSLManager() {
 
 void SSLManagerCoordinator::rotate() {
 // Note: This isn't Windows-specific code, but other platforms may need more work
-#ifdef _WIN32
+#if defined(_WIN32) || defined(__APPLE__)
     stdx::lock_guard lockGuard(_lock);
     _manager = SSLManagerInterface::create(sslGlobalParams, isSSLServer);
 
@@ -366,7 +366,7 @@ void SSLManagerCoordinator::rotate() {
     transport::TransportLayer* tl = getGlobalServiceContext()->getTransportLayer();
     invariant(tl != nullptr);
     uassertStatusOK(tl->rotateCertificates(*_manager));
-    LOGV2(4913400, "Completed rotate successfully!");
+    LOGV2(4913400, "Successfully rotated X509 certificates.");
 #endif
 }
 
