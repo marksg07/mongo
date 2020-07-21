@@ -40,11 +40,13 @@
 
     mongod.adminCommand({rotateCertificates: 1});
 
+    const host = "localhost:" + mongod.port;
+
     // Start shell with old certificates and make sure it can't connecty
-    let out = runMongoProgram("mongo", "--ssl", "--sslPEMKeyFile", "jstests/libs/client.pem", "--sslCAFile", "jstests/libs/ca.pem", "--eval", ";");
+    let out = runMongoProgram("mongo", "--host", host, "--ssl", "--sslPEMKeyFile", "jstests/libs/client.pem", "--sslCAFile", "jstests/libs/ca.pem", "--eval", ";");
     assert.neq(out, 0, "Mongo invocation did not fail");
 
     // Start shell with new certificates and make sure it can connect
-    out = runMongoProgram("mongo", "--ssl", "--sslPEMKeyFile", dbPath + "/client-test.pem", "--sslCAFile", dbPath + "/ca-test.pem", "--eval", ";");
+    out = runMongoProgram("mongo", "--host", host, "--ssl", "--sslPEMKeyFile", "jstests/libs/trusted-client.pem", "--sslCAFile", "jstests/libs/trusted-ca.pem", "--eval", ";");
     assert.eq(out, 0, "Mongo invocation failed");
 }());
