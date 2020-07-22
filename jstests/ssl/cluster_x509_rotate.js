@@ -67,10 +67,14 @@
 
     mongos = st.s0;
     // Make sure all hosts are known
-    assert.soon(() => {
-        mongos.adminCommand({multicast: {ping: 0}});
-        return true;
-    });
+
+    let output = mongos.adminCommand({multicast: {ping: 0}});
+    assert.eq(output.ok, 1);
+    let keys = [];
+    for (let key in output.hosts) {
+        keys.push(key);
+    }
+    jsTestLog("Keys in multicast: " + tojson(keys));
     
     const rst = st.rs0;
     const primary = rst.getPrimary();
@@ -91,22 +95,23 @@
     assert(primary.host in getConnPoolHosts());
 
     // Drop connection to the primary before killing it
-    const poolHosts = getConnPoolHosts();
-    let keys = [];
-    for (let key in poolHosts) {
-        keys.push(key);
-    }
+    
     assert.commandWorked(mongos.adminCommand({dropConnections: 1, hostAndPort: keys}));
     assert(!(primary.host in getConnPoolHosts()));
 
-    let output = mongos.adminCommand({multicast: {ping: 0}});
+    output = mongos.adminCommand({multicast: {ping: 0}});
+    jsTestLog("Multicast 1 output: " + tojson(output));
     assert.eq(output.ok, 0);
     for(let host in output.hosts) {
-        if(host == primary.host) {
+        if(host === primary.host) {
             assert.eq(output.hosts[host].ok, 0);
         } else {
             assert.eq(output.hosts[host].ok, 1);
         }
+    }
+    for(let key of keys) {
+        jsTestLog("Checking if " + key + " in MC 1 output");
+        assert(key in output.hosts);
     }
 
     assert.soon(() => {
@@ -118,13 +123,17 @@
     assert(!(primary.host in getConnPoolHosts()));
 
     output = mongos.adminCommand({multicast: {ping: 0}});
+    jsTestLog("Multicast 2 output: " + tojson(output));
     assert.eq(output.ok, 0);
     for(let host in output.hosts) {
-        if(host == primary.host) {
+        if(host === primary.host) {
             assert.eq(output.hosts[host].ok, 1);
         } else {
             assert.eq(output.hosts[host].ok, 0);
         }
+    }
+    for(let key of keys) {
+        assert(key in output.hosts);
     }
     return;
     
