@@ -88,7 +88,7 @@
     copyfile("jstests/libs/trusted-client.pem", dbPath + "/client-test.pem");
     copyfile("jstests/libs/trusted-server.pem", dbPath + "/server-test.pem");
     assert.soon(() => {
-        mongos.adminCommand({rotateCertificates: 1});
+        assert.commandWorked(mongos.adminCommand({rotateCertificates: 1}));
         return true;
     });
     
@@ -98,9 +98,13 @@
         rst.start(primaryId, {waitForConnect: false}, true);
         return true;
     });
+    assert.soon(() => {
+        runMongoProgram("mongo", "--sslAllowInvalidHostnames", "--host", primary.host, "--ssl", "--sslPEMKeyFile", "jstests/libs/trusted-client.pem", "--sslCAFile", "jstests/libs/trusted-ca.pem", "--eval", ";"); // db.adminCommand({shutdown: 1, force: true});");
+        return true;
+    });
     
     assert.soon(() => {
-        mongos.adminCommand({multicast: {ping: 0}});
+        assert.commandWorked(mongos.adminCommand({multicast: {ping: 0}}));
         return true;
     });
 
