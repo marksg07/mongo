@@ -344,6 +344,7 @@ SSLManagerCoordinator* SSLManagerCoordinator::get() {
 }
 
 std::shared_ptr<SSLManagerInterface> SSLManagerCoordinator::getSSLManager() {
+    stdx::lock_guard lockGuard(_lock);
     return *_manager;
 }
 
@@ -351,7 +352,7 @@ void SSLManagerCoordinator::rotate() {
 // Note: This isn't Windows-specific code, but other platforms may need more work
 #if defined(_WIN32) || defined(__APPLE__)
     stdx::lock_guard lockGuard(_lock);
-    _manager = SSLManagerInterface::create(sslGlobalParams, isSSLServer);
+    auto manager = SSLManagerInterface::create(sslGlobalParams, isSSLServer);
 
     int clusterAuthMode = serverGlobalParams.clusterAuthMode.load();
     if (clusterAuthMode == ServerGlobalParams::ClusterAuthMode_x509 ||
@@ -360,12 +361,13 @@ void SSLManagerCoordinator::rotate() {
             BSON(saslCommandMechanismFieldName
                  << "MONGODB-X509" << saslCommandUserDBFieldName << "$external"
                  << saslCommandUserFieldName
-                 << _manager->get()->getSSLConfiguration().clientSubjectName.toString()));
+                 << manager->getSSLConfiguration().clientSubjectName.toString()));
     }
 
-    transport::TransportLayer* tl = getGlobalServiceContext()->getTransportLayer();
+    auto tl = getGlobalServiceContext()->getTransportLayer();
     invariant(tl != nullptr);
-    uassertStatusOK(tl->rotateCertificates(*_manager));
+    uassertStatusOK(tl->rotateCertificates(manager));
+    _manager = manager;
     LOGV2(4913400, "Successfully rotated X509 certificates.");
 #endif
 }

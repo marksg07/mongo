@@ -262,10 +262,6 @@ TransportLayerASIO::TransportLayerASIO(const TransportLayerASIO::Options& opts,
     : _ingressReactor(std::make_shared<ASIOReactor>()),
       _egressReactor(std::make_shared<ASIOReactor>()),
       _acceptorReactor(std::make_shared<ASIOReactor>()),
-#ifdef MONGO_CONFIG_SSL
-      _ingressSSLContext(nullptr),
-      _egressSSLContext(nullptr),
-#endif
       _sep(sep),
       _listenerOptions(opts) {
 }
@@ -1186,21 +1182,22 @@ SSLParams::SSLModes TransportLayerASIO::_sslMode() const {
 }
 
 Status TransportLayerASIO::rotateCertificates(std::shared_ptr<SSLManagerInterface> manager) {
-    _sslManager = manager;
+    auto newSSLContext = std::make_shared<SSLConnectionContext>();
+    newSSLContext->manager = manager;
     const auto& sslParams = getSSLGlobalParams();
 
     if (_sslMode() != SSLParams::SSLMode_disabled && _listenerOptions.isIngress()) {
-        _ingressSSLContext = std::make_unique<asio::ssl::context>(asio::ssl::context::sslv23);
+        newSSLContext->ingress = std::make_unique<asio::ssl::context>(asio::ssl::context::sslv23);
 
         Status status =
-            _sslManager->initSSLContext(_ingressSSLContext->native_handle(),
+            newSSLContext->manager->initSSLContext(newSSLContext->ingress->native_handle(),
                                         sslParams,
                                         SSLManagerInterface::ConnectionDirection::kIncoming);
         if (!status.isOK()) {
             return status;
         }
 
-        auto resp = _sslManager->stapleOCSPResponse(_ingressSSLContext->native_handle());
+        auto resp = newSSLContext->manager->stapleOCSPResponse(newSSLContext->ingress->native_handle());
         if (!resp.isOK()) {
             return Status(ErrorCodes::InvalidSSLConfiguration,
                           str::stream()
@@ -1208,16 +1205,17 @@ Status TransportLayerASIO::rotateCertificates(std::shared_ptr<SSLManagerInterfac
         }
     }
 
-    if (_listenerOptions.isEgress() && _sslManager) {
-        _egressSSLContext = std::make_unique<asio::ssl::context>(asio::ssl::context::sslv23);
+    if (_listenerOptions.isEgress() && newSSLContext->manager) {
+        newSSLContext->egress = std::make_unique<asio::ssl::context>(asio::ssl::context::sslv23);
         Status status =
-            _sslManager->initSSLContext(_egressSSLContext->native_handle(),
+            newSSLContext->manager->initSSLContext(newSSLContext->egress->native_handle(),
                                         sslParams,
                                         SSLManagerInterface::ConnectionDirection::kOutgoing);
         if (!status.isOK()) {
             return status;
         }
     }
+    _sslContext = std::move(newSSLContext);
     return Status::OK();
 }
 #endif
