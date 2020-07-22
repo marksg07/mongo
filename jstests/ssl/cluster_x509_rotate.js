@@ -75,22 +75,58 @@
     const rst = st.rs0;
     const primary = rst.getPrimary();
     const primaryId = rst.getNodeId(primary);
-
-    // Since we pinged, the primary should be present
-    assert(primary.host in getConnPoolHosts());
-
-    // Drop connection to the primary before killing it
-    mongos.adminCommand({dropConnections: 1, hostAndPort: [primary.host]});
-    assert(!(primary.host in getConnPoolHosts()));
     
     // Swap out the certificate files and rotate. If rotate works, mongos should be able to connect to the restarted shard.
     copyfile("jstests/libs/trusted-ca.pem", dbPath + "/ca-test.pem");
     copyfile("jstests/libs/trusted-client.pem", dbPath + "/client-test.pem");
     copyfile("jstests/libs/trusted-server.pem", dbPath + "/server-test.pem");
+    assert.commandWorked(mongos.adminCommand({multicast: {ping: 0}}));
+
+    assert.soon(() => {
+        assert.commandWorked(primary.adminCommand({rotateCertificates: 1}));
+        return true;
+    });
+
+    // Since we pinged, the primary should be present
+    assert(primary.host in getConnPoolHosts());
+
+    // Drop connection to the primary before killing it
+    const poolHosts = getConnPoolHosts();
+    let keys = [];
+    for (let key in poolHosts) {
+        keys.push(key);
+    }
+    assert.commandWorked(mongos.adminCommand({dropConnections: 1, hostAndPort: keys}));
+    assert(!(primary.host in getConnPoolHosts()));
+
+    let output = mongos.adminCommand({multicast: {ping: 0}});
+    assert.eq(output.ok, 0);
+    for(let host in output.hosts) {
+        if(host == primary.host) {
+            assert.eq(output.hosts[host].ok, 0);
+        } else {
+            assert.eq(output.hosts[host].ok, 1);
+        }
+    }
+
     assert.soon(() => {
         assert.commandWorked(mongos.adminCommand({rotateCertificates: 1}));
         return true;
     });
+
+    mongos.adminCommand({dropConnections: 1, hostAndPort: keys});
+    assert(!(primary.host in getConnPoolHosts()));
+
+    output = mongos.adminCommand({multicast: {ping: 0}});
+    assert.eq(output.ok, 0);
+    for(let host in output.hosts) {
+        if(host == primary.host) {
+            assert.eq(output.hosts[host].ok, 1);
+        } else {
+            assert.eq(output.hosts[host].ok, 0);
+        }
+    }
+    return;
     
     // Can't use .restart since waitForConnect must be false. Otherwise, this would hang as the shard has an unmatching certificate.
     assert.soon(() => {
@@ -99,7 +135,7 @@
         return true;
     });
     assert.soon(() => {
-        runMongoProgram("mongo", "--sslAllowInvalidHostnames", "--host", primary.host, "--ssl", "--sslPEMKeyFile", "jstests/libs/trusted-client.pem", "--sslCAFile", "jstests/libs/trusted-ca.pem", "--eval", ";"); // db.adminCommand({shutdown: 1, force: true});");
+        assert.eq(0, runMongoProgram("mongo", "--sslAllowInvalidHostnames", "--host", primary.host, "--ssl", "--sslPEMKeyFile", "jstests/libs/trusted-client.pem", "--sslCAFile", "jstests/libs/trusted-ca.pem", "--eval", ";")); // db.adminCommand({shutdown: 1, force: true});");
         return true;
     });
     
