@@ -351,7 +351,7 @@ void SSLManagerCoordinator::rotate() {
 // Note: This isn't Windows-specific code, but other platforms may need more work
 #if defined(_WIN32) || defined(__APPLE__)
     stdx::lock_guard lockGuard(_lock);
-    auto manager = SSLManagerInterface::create(sslGlobalParams, isSSLServer);
+    std::shared_ptr<SSLManagerInterface> manager = SSLManagerInterface::create(sslGlobalParams, isSSLServer);
 
     int clusterAuthMode = serverGlobalParams.clusterAuthMode.load();
     if (clusterAuthMode == ServerGlobalParams::ClusterAuthMode_x509 ||
