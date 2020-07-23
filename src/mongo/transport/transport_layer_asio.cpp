@@ -263,8 +263,7 @@ TransportLayerASIO::TransportLayerASIO(const TransportLayerASIO::Options& opts,
       _egressReactor(std::make_shared<ASIOReactor>()),
       _acceptorReactor(std::make_shared<ASIOReactor>()),
       _sep(sep),
-      _listenerOptions(opts) {
-}
+      _listenerOptions(opts) {}
 
 TransportLayerASIO::~TransportLayerASIO() = default;
 
@@ -1189,15 +1188,16 @@ Status TransportLayerASIO::rotateCertificates(std::shared_ptr<SSLManagerInterfac
     if (_sslMode() != SSLParams::SSLMode_disabled && _listenerOptions.isIngress()) {
         newSSLContext->ingress = std::make_unique<asio::ssl::context>(asio::ssl::context::sslv23);
 
-        Status status =
-            newSSLContext->manager->initSSLContext(newSSLContext->ingress->native_handle(),
-                                        sslParams,
-                                        SSLManagerInterface::ConnectionDirection::kIncoming);
+        Status status = newSSLContext->manager->initSSLContext(
+            newSSLContext->ingress->native_handle(),
+            sslParams,
+            SSLManagerInterface::ConnectionDirection::kIncoming);
         if (!status.isOK()) {
             return status;
         }
 
-        auto resp = newSSLContext->manager->stapleOCSPResponse(newSSLContext->ingress->native_handle());
+        auto resp =
+            newSSLContext->manager->stapleOCSPResponse(newSSLContext->ingress->native_handle());
         if (!resp.isOK()) {
             return Status(ErrorCodes::InvalidSSLConfiguration,
                           str::stream()
@@ -1207,10 +1207,10 @@ Status TransportLayerASIO::rotateCertificates(std::shared_ptr<SSLManagerInterfac
 
     if (_listenerOptions.isEgress() && newSSLContext->manager) {
         newSSLContext->egress = std::make_unique<asio::ssl::context>(asio::ssl::context::sslv23);
-        Status status =
-            newSSLContext->manager->initSSLContext(newSSLContext->egress->native_handle(),
-                                        sslParams,
-                                        SSLManagerInterface::ConnectionDirection::kOutgoing);
+        Status status = newSSLContext->manager->initSSLContext(
+            newSSLContext->egress->native_handle(),
+            sslParams,
+            SSLManagerInterface::ConnectionDirection::kOutgoing);
         if (!status.isOK()) {
             return status;
         }

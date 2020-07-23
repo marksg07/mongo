@@ -272,8 +272,7 @@ protected:
                                                   "SSL requested but SSL support is disabled"));
         }
 
-        _sslSocket.emplace(
-            std::move(_socket), *_sslContext->egress, removeFQDNRoot(target.host()));
+        _sslSocket.emplace(std::move(_socket), *_sslContext->egress, removeFQDNRoot(target.host()));
         lk.unlock();
 
         auto doHandshake = [&] {
