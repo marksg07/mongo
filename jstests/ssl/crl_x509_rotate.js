@@ -44,7 +44,7 @@
     mongod.adminCommand({rotateCertificates: 1});
 
     // Make sure client-revoked can't connect
-    let out = runMongoProgram("mongo", "--host", host, "--ssl", "--sslPEMKeyFile", "jstests/libs/client_revoked.pem", "--sslCAFile", "jstests/libs/ca.pem", "--eval", ";");
+    out = runMongoProgram("mongo", "--host", host, "--ssl", "--sslPEMKeyFile", "jstests/libs/client_revoked.pem", "--sslCAFile", "jstests/libs/ca.pem", "--eval", ";");
     assert.neq(out, 0, "Mongo invocation did not fail");
 
     // Make sure client can still connect
