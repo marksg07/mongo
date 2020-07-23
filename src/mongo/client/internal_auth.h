@@ -33,17 +33,7 @@
 #include <memory>
 #include <string>
 
-#include "mongo/base/status_with.h"
-#include "mongo/base/string_data.h"
 #include "mongo/bson/bsonobj.h"
-#include "mongo/client/mongo_uri.h"
-#include "mongo/client/sasl_client_session.h"
-#include "mongo/db/auth/user_name.h"
-#include "mongo/executor/remote_command_response.h"
-#include "mongo/rpc/op_msg.h"
-#include "mongo/util/future.h"
-#include "mongo/util/md5.h"
-#include "mongo/util/net/hostandport.h"
 
 namespace mongo {
 
