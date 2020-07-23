@@ -135,6 +135,7 @@
     for(let key of keys) {
         assert(key in output.hosts);
     }
+    // Don't call st.stop() -- breaks because cluster is partially rotated
     return;
     
     // Can't use .restart since waitForConnect must be false. Otherwise, this would hang as the shard has an unmatching certificate.
