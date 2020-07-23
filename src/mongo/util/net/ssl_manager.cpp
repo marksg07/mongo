@@ -344,7 +344,6 @@ SSLManagerCoordinator* SSLManagerCoordinator::get() {
 }
 
 std::shared_ptr<SSLManagerInterface> SSLManagerCoordinator::getSSLManager() {
-    stdx::lock_guard lockGuard(_lock);
     return *_manager;
 }
 
