@@ -59,13 +59,16 @@
         assert.commandWorked(node.adminCommand({rotateCertificates: 1}));
     }
 
-    rst.add({
+    let newnode = rst.add({
         sslMode: "requireSSL",
         sslPEMKeyFile: "jstests/libs/trusted-server.pem",
         sslCAFile: "jstests/libs/trusted-ca.pem",
         sslClusterFile: "jstests/libs/trusted-client.pem",
         sslAllowInvalidHostnames: "",
+        waitForConnect: false,
     });
+
+    assert.eq(0, runMongoProgram("mongo", "--ssl", "--sslAllowInvalidHostnames", "--host", newnode.host, "--sslPEMKeyFile", "jstests/libs/trusted-client.pem", "--sslCAFile", "jstests/libs/trusted-ca.pem", "--eval", ";"));
 
     rst.reInitiate();
 
