@@ -369,7 +369,7 @@ function supportsStapling() {
 }
 
 function copyCertificateFile(a, b) {
-    if(_isWindows()) {
+    if (_isWindows()) {
         // correctly replace forward slashes for Windows
         a = a.replace(/\//g, "\\");
         b = b.replace(/\//g, "\\");

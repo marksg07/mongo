@@ -1,60 +1,70 @@
 // Check that rotation works for the cluster certificate
 
 (function() {
-    "use strict";
+"use strict";
 
-    load('jstests/ssl/libs/ssl_helpers.js');
-    
-    if (determineSSLProvider() === "openssl") {    
-        return;
-    }
-    
-    const dbPath = MongoRunner.toRealDir("$dataDir/cluster_x509_rotate_test/");
-    mkdir(dbPath);
-    
-    copyCertificateFile("jstests/libs/ca.pem", dbPath + "/ca-test.pem");
-    copyCertificateFile("jstests/libs/client.pem", dbPath + "/client-test.pem");
-    copyCertificateFile("jstests/libs/server.pem", dbPath + "/server-test.pem");
+load('jstests/ssl/libs/ssl_helpers.js');
 
-    // Make replset with old certificates, rotate to new certificates, and try to add
-    // a node with new certificates.    
-    const rst = new ReplSetTest({nodes: 2});
-    rst.startSet({
-        sslMode: "requireSSL",
-        sslPEMKeyFile: dbPath + "/server-test.pem",
-        sslCAFile: dbPath + "/ca-test.pem",
-        sslClusterFile: dbPath + "/client-test.pem",
-        sslAllowInvalidHostnames: "",
-    });
+if (determineSSLProvider() === "openssl") {
+    return;
+}
 
-    rst.initiate();
-    rst.awaitReplication();
+const dbPath = MongoRunner.toRealDir("$dataDir/cluster_x509_rotate_test/");
+mkdir(dbPath);
 
-    copyCertificateFile("jstests/libs/trusted-ca.pem", dbPath + "/ca-test.pem");
-    copyCertificateFile("jstests/libs/trusted-client.pem", dbPath + "/client-test.pem");
-    copyCertificateFile("jstests/libs/trusted-server.pem", dbPath + "/server-test.pem");
+copyCertificateFile("jstests/libs/ca.pem", dbPath + "/ca-test.pem");
+copyCertificateFile("jstests/libs/client.pem", dbPath + "/client-test.pem");
+copyCertificateFile("jstests/libs/server.pem", dbPath + "/server-test.pem");
 
-    for(let node of rst.nodes) {
-        assert.commandWorked(node.adminCommand({rotateCertificates: 1}));
-    }
+// Make replset with old certificates, rotate to new certificates, and try to add
+// a node with new certificates.
+const rst = new ReplSetTest({nodes: 2});
+rst.startSet({
+    sslMode: "requireSSL",
+    sslPEMKeyFile: dbPath + "/server-test.pem",
+    sslCAFile: dbPath + "/ca-test.pem",
+    sslClusterFile: dbPath + "/client-test.pem",
+    sslAllowInvalidHostnames: "",
+});
 
-    const newnode = rst.add({
-        sslMode: "requireSSL",
-        sslPEMKeyFile: "jstests/libs/trusted-server.pem",
-        sslCAFile: "jstests/libs/trusted-ca.pem",
-        sslClusterFile: "jstests/libs/trusted-client.pem",
-        sslAllowInvalidHostnames: "",
-        waitForConnect: false,
-    });
+rst.initiate();
+rst.awaitReplication();
 
-    // Emulate waitForConnect so we wait for new node to come up before killing rst
-    const host = "localhost:" + newnode.port;
-    assert.soon(() => {
-        return 0 === runMongoProgram("mongo", "--ssl", "--sslAllowInvalidHostnames", "--host", host, "--sslPEMKeyFile", "jstests/libs/trusted-client.pem", "--sslCAFile", "jstests/libs/trusted-ca.pem", "--eval", ";");
-    });
+copyCertificateFile("jstests/libs/trusted-ca.pem", dbPath + "/ca-test.pem");
+copyCertificateFile("jstests/libs/trusted-client.pem", dbPath + "/client-test.pem");
+copyCertificateFile("jstests/libs/trusted-server.pem", dbPath + "/server-test.pem");
 
-    // If all of this cleanup finishes, we successfully joined the RS
-    rst.reInitiate();
-    rst.stopSet();
+for (let node of rst.nodes) {
+    assert.commandWorked(node.adminCommand({rotateCertificates: 1}));
+}
+
+const newnode = rst.add({
+    sslMode: "requireSSL",
+    sslPEMKeyFile: "jstests/libs/trusted-server.pem",
+    sslCAFile: "jstests/libs/trusted-ca.pem",
+    sslClusterFile: "jstests/libs/trusted-client.pem",
+    sslAllowInvalidHostnames: "",
+    waitForConnect: false,
+});
+
+// Emulate waitForConnect so we wait for new node to come up before killing rst
+const host = "localhost:" + newnode.port;
+assert.soon(() => {
+    return 0 ===
+        runMongoProgram("mongo",
+                        "--ssl",
+                        "--sslAllowInvalidHostnames",
+                        "--host",
+                        host,
+                        "--sslPEMKeyFile",
+                        "jstests/libs/trusted-client.pem",
+                        "--sslCAFile",
+                        "jstests/libs/trusted-ca.pem",
+                        "--eval",
+                        ";");
+});
+
+// If all of this cleanup finishes, we successfully joined the RS
+rst.reInitiate();
+rst.stopSet();
 }());
-    
