@@ -8,24 +8,13 @@
     if (determineSSLProvider() === "openssl" || determineSSLProvider() === "apple") {    
         return;
     }
-    
-    function winpath(p) {
-        return p.replace(/\//g, "\\");
-    }
-    
-    function copyfile(a, b) {
-        if(_isWindows()) {
-            return assert.eq(0, runProgram("cmd.exe", "/c", "copy", winpath(a), winpath(b)));
-        }
-        return assert.eq(0, runProgram("cp", a, b));
-    }
 
     const dbPath = MongoRunner.toRealDir("$dataDir/cluster_x509_rotate_test/");
     mkdir(dbPath);
     
-    copyfile("jstests/libs/crl.pem", dbPath + "/crl-test.pem");
+    copyCertificateFile("jstests/libs/crl.pem", dbPath + "/crl-test.pem");
 
-    let mongod = MongoRunner.runMongod({
+    const mongod = MongoRunner.runMongod({
         sslMode: "requireSSL",
         sslPEMKeyFile: "jstests/libs/server.pem",
         sslCAFile: "jstests/libs/ca.pem",
@@ -34,14 +23,14 @@
 
     const host = "localhost:" + mongod.port;
 
-    // Make sure that client-revoked can connect
+    // Make sure that client-revoked can connect at first
     let out = runMongoProgram("mongo", "--host", host, "--ssl", "--sslPEMKeyFile", "jstests/libs/client_revoked.pem", "--sslCAFile", "jstests/libs/ca.pem", "--eval", ";");
-    assert.eq(out, 0);
+    assert.eq(out, 0, "Initial mongo invocation failed");
 
     // Rotate in new CRL
-    copyfile("jstests/libs/crl_client_revoked.pem", dbPath + "/crl-test.pem");
+    copyCertificateFile("jstests/libs/crl_client_revoked.pem", dbPath + "/crl-test.pem");
 
-    mongod.adminCommand({rotateCertificates: 1});
+    assert.commandWorked(mongod.adminCommand({rotateCertificates: 1}));
 
     // Make sure client-revoked can't connect
     out = runMongoProgram("mongo", "--host", host, "--ssl", "--sslPEMKeyFile", "jstests/libs/client_revoked.pem", "--sslCAFile", "jstests/libs/ca.pem", "--eval", ";");

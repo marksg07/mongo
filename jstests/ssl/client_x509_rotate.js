@@ -8,17 +8,6 @@
     if (determineSSLProvider() === "openssl") {    
         return;
     }
-    
-    function winpath(p) {
-        return p.replace(/\//g, "\\");
-    }
-    
-    function copyfile(a, b) {
-        if(_isWindows()) {
-            return assert.eq(0, runProgram("cmd.exe", "/c", "copy", winpath(a), winpath(b)));
-        }
-        return assert.eq(0, runProgram("cp", a, b));
-    }
 
     let mongos;
     function getConnPoolHosts() {
@@ -31,11 +20,14 @@
     const dbPath = MongoRunner.toRealDir("$dataDir/cluster_x509_rotate_test/");
     mkdir(dbPath);
     
-    copyfile("jstests/libs/ca.pem", dbPath + "/ca-test.pem");
-    copyfile("jstests/libs/client.pem", dbPath + "/client-test.pem");
-    copyfile("jstests/libs/server.pem", dbPath + "/server-test.pem");
+    copyCertificateFile("jstests/libs/ca.pem", dbPath + "/ca-test.pem");
+    copyCertificateFile("jstests/libs/client.pem", dbPath + "/client-test.pem");
+    copyCertificateFile("jstests/libs/server.pem", dbPath + "/server-test.pem");
     
     // server certificate is held constant so that shell can still connect
+    // we start a cluster using the old certificates, then rotate one shard to use new certificates.
+    // Make sure that mongos can communicate with every connected host EXCEPT that shard before a rotate,
+    // and make sure it can communicate with ONLY that shard after a rotate. 
     const mongosOptions = {
         sslMode: "requireSSL",
         sslPEMKeyFile: "jstests/libs/server.pem",
@@ -63,44 +55,39 @@
         }
     };
 
-    let st = new ShardingTest(sharding_config);
+    const st = new ShardingTest(sharding_config);
 
     mongos = st.s0;
-    // Make sure all hosts are known
 
+    // Keep track of the hosts we hit in the initial ping multicast to compare against later multicasts
     let output = mongos.adminCommand({multicast: {ping: 0}});
     assert.eq(output.ok, 1);
+    
     let keys = [];
     for (let key in output.hosts) {
         keys.push(key);
     }
-    jsTestLog("Keys in multicast: " + tojson(keys));
     
     const rst = st.rs0;
     const primary = rst.getPrimary();
-    const primaryId = rst.getNodeId(primary);
     
-    // Swap out the certificate files and rotate. If rotate works, mongos should be able to connect to the restarted shard.
-    copyfile("jstests/libs/trusted-ca.pem", dbPath + "/ca-test.pem");
-    copyfile("jstests/libs/trusted-client.pem", dbPath + "/client-test.pem");
-    copyfile("jstests/libs/trusted-server.pem", dbPath + "/server-test.pem");
-    assert.commandWorked(mongos.adminCommand({multicast: {ping: 0}}));
+    // Swap out the certificate files and rotate the primary shard.
+    copyCertificateFile("jstests/libs/trusted-ca.pem", dbPath + "/ca-test.pem");
+    copyCertificateFile("jstests/libs/trusted-client.pem", dbPath + "/client-test.pem");
+    copyCertificateFile("jstests/libs/trusted-server.pem", dbPath + "/server-test.pem");
 
-    assert.soon(() => {
-        assert.commandWorked(primary.adminCommand({rotateCertificates: 1}));
-        return true;
-    });
+    assert.commandWorked(primary.adminCommand({rotateCertificates: 1}));
 
-    // Since we pinged, the primary should be present
+    // Make sure the primary is initially present
     assert(primary.host in getConnPoolHosts());
 
-    // Drop connection to the primary before killing it
-    
+    // Drop connection to all hosts to see what we can reconnect to
     assert.commandWorked(mongos.adminCommand({dropConnections: 1, hostAndPort: keys}));
     assert(!(primary.host in getConnPoolHosts()));
 
     output = mongos.adminCommand({multicast: {ping: 0}});
     jsTestLog("Multicast 1 output: " + tojson(output));
+    // multicast should fail, because the primary shard isn't hit
     assert.eq(output.ok, 0);
     for(let host in output.hosts) {
         if(host === primary.host) {
@@ -110,14 +97,11 @@
         }
     }
     for(let key of keys) {
-        jsTestLog("Checking if " + key + " in MC 1 output");
         assert(key in output.hosts);
     }
 
-    assert.soon(() => {
-        assert.commandWorked(mongos.adminCommand({rotateCertificates: 1}));
-        return true;
-    });
+    // rotate, drop all connections, re-multicast and see what we now hit
+    assert.commandWorked(mongos.adminCommand({rotateCertificates: 1}));
 
     mongos.adminCommand({dropConnections: 1, hostAndPort: keys});
     assert(!(primary.host in getConnPoolHosts()));
@@ -135,75 +119,7 @@
     for(let key of keys) {
         assert(key in output.hosts);
     }
-    // Don't call st.stop() -- breaks because cluster is partially rotated
+    // Don't call st.stop() -- breaks because cluster is only partially rotated (this is hard to fix)
     return;
-    
-    // Can't use .restart since waitForConnect must be false. Otherwise, this would hang as the shard has an unmatching certificate.
-    assert.soon(() => {
-        rst.stop(primaryId, undefined, undefined, {forRestart: true});
-        rst.start(primaryId, {waitForConnect: false}, true);
-        return true;
-    });
-    assert.soon(() => {
-        assert.eq(0, runMongoProgram("mongo", "--sslAllowInvalidHostnames", "--host", primary.host, "--ssl", "--sslPEMKeyFile", "jstests/libs/trusted-client.pem", "--sslCAFile", "jstests/libs/trusted-ca.pem", "--eval", ";")); // db.adminCommand({shutdown: 1, force: true});");
-        return true;
-    });
-    
-    assert.soon(() => {
-        assert.commandWorked(mongos.adminCommand({multicast: {ping: 0}}));
-        return true;
-    });
-
-    // Check for successful connection, indicating rotation successful
-    assert(primary.host in getConnPoolHosts());
-    jsTestLog("TEST-MSG Killing");
-    //rst.stop(primary);
-    jsTestLog("TEST-MSG Done");
-    //primary.adminCommand({shutdown: 1, force: true});
-    copyfile("jstests/libs/ca.pem", dbPath + "/ca-test.pem");
-    copyfile("jstests/libs/client.pem", dbPath + "/client-test.pem");
-    copyfile("jstests/libs/server.pem", dbPath + "/server-test.pem");
-    mongos.adminCommand({rotateCertificates: 1});
-    const host = "localhost:" + primary.port;
-    runMongoProgram("mongo", "--host", host, "--ssl", "--sslAllowInvalidHostnames", "--sslPEMKeyFile", "jstests/libs/trusted-client.pem", "--sslCAFile", "jstests/libs/trusted-ca.pem", "--exec", "db.adminCommand({rotateCertificates: 1});"); // db.adminCommand({shutdown: 1, force: true});");
-    rst._waitForInitialConnection(primaryId);
-    jsTestLog("TEST-MSG Almost done");
-    st.stop();
-    jsTestLog("TEST-MSG free");
-    return;    
-
-
-    copyfile("jstests/libs/ca.pem", dbPath + "/ca-test.pem");
-    copyfile("jstests/libs/client.pem", dbPath + "/client-test.pem");
-    copyfile("jstests/libs/server.pem", dbPath + "/server-test.pem");
-    mongos.adminCommand({rotateCertificates: 1});
-    host = "localhost:" + primary.port;
-    runMongoProgram("mongo", "--host", host, "--ssl", "--sslPEMKeyFile", "jstests/libs/trusted-client.pem", "--sslCAFile", "jstests/libs/trusted-ca.pem", "--exec", "db.adminCommand({rotateCertificates: 1}); db.adminCommand({shutdown: 1, force: true});");
-    
-    assert.soon(() => {
-        jsTestLog("TEST-MSG kill ms");
-        //mongos.adminCommand({shutdown: 1, force: true});
-        runMongoProgram("mongo", "--host", "localhost:" + mongos.port, "--ssl", "--sslPEMKeyFile", "jstests/libs/client.pem", "--sslCAFile", "jstests/libs/ca.pem", "--exec", "db.adminCommand({shutdown: 1, force: true});");
-
-        jsTestLog("TEST-MSG rot mongos");
-        for (let r of rst.nodes) {
-            if(r.host !== primary.host) {
-                //r.adminCommand({shutdown: 1, force: true});
-                runMongoProgram("mongo", "--host", "localhost:" + r.port, "--ssl", "--sslPEMKeyFile", "jstests/libs/client.pem", "--sslCAFile", "jstests/libs/ca.pem", "--exec", "db.adminCommand({shutdown: 1, force: true});");
-            }
-            jsTestLog("TEST-MSG rot r");
-        }
-        for (let c of st.configRS.nodes) {
-            //c.adminCommand({shutdown: 1, force: true});
-            runMongoProgram("mongo", "--host", "localhost:" + c.port, "--ssl", "--sslPEMKeyFile", "jstests/libs/client.pem", "--sslCAFile", "jstests/libs/ca.pem", "--exec", "db.adminCommand({shutdown: 1, force: true});");
-
-            jsTestLog("TEST-MSG rot c");
-        }
-        jsTestLog("TEST-MSG Done");
-        return true;
-    });
-    jsTestLog("TEST-MSG almost stoppage");
-    //st.stop();
-
-    }());
+}());
     
