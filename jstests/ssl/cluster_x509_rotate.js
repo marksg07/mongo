@@ -68,7 +68,8 @@
         waitForConnect: false,
     });
 
-    assert.eq(0, runMongoProgram("mongo", "--ssl", "--sslAllowInvalidHostnames", "--host", newnode.host, "--sslPEMKeyFile", "jstests/libs/trusted-client.pem", "--sslCAFile", "jstests/libs/trusted-ca.pem", "--eval", ";"));
+    const host = "localhost:" + newnode.port;
+    assert.eq(0, runMongoProgram("mongo", "--ssl", "--sslAllowInvalidHostnames", "--host", host, "--sslPEMKeyFile", "jstests/libs/trusted-client.pem", "--sslCAFile", "jstests/libs/trusted-ca.pem", "--eval", ";"));
 
     rst.reInitiate();
 
