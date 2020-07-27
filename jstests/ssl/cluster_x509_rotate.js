@@ -68,8 +68,11 @@
         waitForConnect: false,
     });
 
-    const host = "127.0.0.1:" + newnode.port;
-    assert.eq(0, runMongoProgram("mongo", "--ssl", "--sslAllowInvalidHostnames", "--host", host, "--sslPEMKeyFile", "jstests/libs/trusted-client.pem", "--sslCAFile", "jstests/libs/trusted-ca.pem", "--eval", ";"));
+    const host = "localhost:" + newnode.port;
+
+    assert.soon(() => {
+        return 0 === runMongoProgram("mongo", "--ssl", "--sslAllowInvalidHostnames", "--host", host, "--sslPEMKeyFile", "jstests/libs/trusted-client.pem", "--sslCAFile", "jstests/libs/trusted-ca.pem", "--eval", ";");
+    });
 
     rst.reInitiate();
 
