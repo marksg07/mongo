@@ -1,4 +1,4 @@
-// Check that rotation works for the cluster certificate
+// Check that rotation works for the server certificate
 
 (function() {
 "use strict";
@@ -13,7 +13,6 @@ const dbPath = MongoRunner.toRealDir("$dataDir/cluster_x509_rotate_test/");
 mkdir(dbPath);
 
 copyCertificateFile("jstests/libs/ca.pem", dbPath + "/ca-test.pem");
-copyCertificateFile("jstests/libs/client.pem", dbPath + "/client-test.pem");
 copyCertificateFile("jstests/libs/server.pem", dbPath + "/server-test.pem");
 
 const mongod = MongoRunner.runMongod({
@@ -24,10 +23,11 @@ const mongod = MongoRunner.runMongod({
 
 // Rotate in new certificates
 copyCertificateFile("jstests/libs/trusted-ca.pem", dbPath + "/ca-test.pem");
-copyCertificateFile("jstests/libs/trusted-client.pem", dbPath + "/client-test.pem");
 copyCertificateFile("jstests/libs/trusted-server.pem", dbPath + "/server-test.pem");
 
 assert.commandWorked(mongod.adminCommand({rotateCertificates: 1}));
+// make sure that mongo is still connected after rotation
+assert.commandWorked(mongod.adminCommand({connectionStatus: 1}));
 
 const host = "localhost:" + mongod.port;
 
@@ -56,4 +56,6 @@ out = runMongoProgram("mongo",
                       "--eval",
                       ";");
 assert.eq(out, 0, "Mongo invocation failed");
+
+MongoRunner.stopMongod(mongod);
 }());

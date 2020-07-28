@@ -66,4 +66,6 @@ out = runMongoProgram("mongo",
                       "--eval",
                       ";");
 assert.eq(out, 0, "Mongo invocation failed");
+
+MongoRunner.stopMongod(mongod);
 }());

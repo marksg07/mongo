@@ -1,4 +1,4 @@
-// Check that rotation works for the cluster certificate
+// Check that rotation works for the cluster certificate in a sharded cluster
 
 (function() {
 "use strict";

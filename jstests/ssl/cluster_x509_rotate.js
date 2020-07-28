@@ -66,5 +66,8 @@ assert.soon(() => {
 
 // If all of this cleanup finishes, we successfully joined the RS
 rst.reInitiate();
+rst.awaitSecondaryNodes();
+rst.awaitReplication();
+
 rst.stopSet();
 }());

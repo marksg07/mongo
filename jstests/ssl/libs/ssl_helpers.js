@@ -374,6 +374,7 @@ function copyCertificateFile(a, b) {
         a = a.replace(/\//g, "\\");
         b = b.replace(/\//g, "\\");
         assert.eq(0, runProgram("cmd.exe", "/c", "copy", a, b));
+        return;
     }
     assert.eq(0, runProgram("cp", a, b));
 }
