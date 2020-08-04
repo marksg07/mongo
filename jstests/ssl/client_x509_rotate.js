@@ -89,16 +89,24 @@ assert.soon(() => {
     output = mongos.adminCommand({multicast: {ping: 0}});
     jsTestLog("Multicast 1 output: " + tojson(output));
     // multicast should fail, because the primary shard isn't hit
-    assert.eq(output.ok, 0);
+    if (output.ok !== 0) {
+        return false;
+    }
     for (let host in output.hosts) {
         if (host === primary.host) {
-            assert.eq(output.hosts[host].ok, 0);
+            if (output.hosts[host].ok !== 0) {
+                return false;
+            }
         } else {
-            assert.eq(output.hosts[host].ok, 1);
+            if (output.hosts[host].ok !== 1) {
+                return false;
+            }
         }
     }
     for (let key of keys) {
-        assert(key in output.hosts);
+        if (!(key in output.hosts)) {
+            return false;
+        }
     }
     return true;
 });
@@ -112,16 +120,24 @@ assert(!(primary.host in getConnPoolHosts()));
 assert.soon(() => {
     output = mongos.adminCommand({multicast: {ping: 0}});
     jsTestLog("Multicast 2 output: " + tojson(output));
-    assert.eq(output.ok, 0);
+    if (output.ok !== 0) {
+        return false;
+    }
     for (let host in output.hosts) {
         if (host === primary.host) {
-            assert.eq(output.hosts[host].ok, 1);
+            if (output.hosts[host].ok !== 1) {
+                return false;
+            }
         } else {
-            assert.eq(output.hosts[host].ok, 0);
+            if (output.hosts[host].ok !== 0) {
+                return false;
+            }
         }
     }
     for (let key of keys) {
-        assert(key in output.hosts);
+        if (!(key in output.hosts)) {
+            return false;
+        }
     }
     return true;
 });
